@@ -1,0 +1,24 @@
+[package]
+name = "fileinspector"
+version = "0.1.0"
+edition = "2021"
+description = "Interactive disk-usage explorer for the terminal"
+license = "MIT"
+
+[lib]
+name = "fileinspector"
+path = "src/lib.rs"
+
+[dependencies]
+# The ratatui facade crate drags termwiz/termion into the lockfile; the
+# sub-crates give the same API without those optional backends.
+ratatui-core = "0.1"
+ratatui-widgets = "0.3"
+ratatui-crossterm = { version = "0.1", features = ["crossterm_0_29"] }
+crossterm = "0.29"
+clap = { version = "4.6", features = ["derive"] }
+unicode-width = "0.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
