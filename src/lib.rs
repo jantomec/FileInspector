@@ -5,5 +5,6 @@
 //! - `scan`: the filesystem walker that produces a [`tree::Tree`] (owned by the scanner);
 //! - [`tui`]: the interactive terminal UI that consumes scan events.
 
+pub mod scan;
 pub mod tree;
 pub mod tui;

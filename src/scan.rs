@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::tree::{Kind, Node, ScanEvent, Tree};
+use crate::tree::{display_root, Kind, Node, ScanEvent, Tree};
 
 /// Start scanning `root` on a dedicated thread.
 ///
@@ -74,7 +74,11 @@ fn visit(
     let index = tree.nodes.len();
 
     tree.nodes.push(Node {
-        name: display_name(path),
+        name: if parent.is_none() {
+            display_root(path)
+        } else {
+            display_name(path)
+        },
         size: 0,
         kind,
         parent,
