@@ -214,7 +214,7 @@ pub fn group_digits(n: u64) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);
@@ -252,10 +252,20 @@ mod tests {
     fn finalize_sums_and_sorts() {
         let t = sample();
         assert_eq!(t.node(0).size, 1515);
-        let names: Vec<_> = t.node(0).children.iter().map(|&c| t.node(c).name.as_str()).collect();
+        let names: Vec<_> = t
+            .node(0)
+            .children
+            .iter()
+            .map(|&c| t.node(c).name.as_str())
+            .collect();
         assert_eq!(names, ["a", "top", "b"]);
         let a = t.node(0).children[0];
-        let a_names: Vec<_> = t.node(a).children.iter().map(|&c| t.node(c).name.as_str()).collect();
+        let a_names: Vec<_> = t
+            .node(a)
+            .children
+            .iter()
+            .map(|&c| t.node(c).name.as_str())
+            .collect();
         assert_eq!(a_names, ["big", "small"]);
     }
 
@@ -265,7 +275,12 @@ mod tests {
         t.add_child(0, Node::new("zeta", Kind::File, 1));
         t.add_child(0, Node::new("alpha", Kind::File, 1));
         t.finalize();
-        let names: Vec<_> = t.node(0).children.iter().map(|&c| t.node(c).name.as_str()).collect();
+        let names: Vec<_> = t
+            .node(0)
+            .children
+            .iter()
+            .map(|&c| t.node(c).name.as_str())
+            .collect();
         assert_eq!(names, ["alpha", "zeta"]);
     }
 

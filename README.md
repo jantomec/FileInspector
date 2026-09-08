@@ -18,6 +18,15 @@ fi /
 
 Unreadable folders remain visible with an error marker instead of aborting the scan. Symlinks are listed but never followed, so a symlink cycle cannot trap the scanner.
 
+## Navigate
+
+- Move with the arrow keys or `j` / `k`; Page Up, Page Down, `g`, and `G` move farther.
+- Expand or collapse a folder with Left / Right, `h` / `l`, or Space.
+- Press Enter to focus on a folder and Backspace or `u` to move back out.
+- Press `s` to sort by size, name, or item count.
+- Mouse clicks and the scroll wheel work too.
+- Press `?` for the in-app key guide and `q`, Escape, or Ctrl-C to quit.
+
 ## Install it
 
 Install for your user with Cargo:
