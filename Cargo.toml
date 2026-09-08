@@ -9,6 +9,10 @@ license = "MIT"
 name = "fileinspector"
 path = "src/lib.rs"
 
+[[bin]]
+name = "fi"
+path = "src/main.rs"
+
 [dependencies]
 # The ratatui facade crate drags termwiz/termion into the lockfile; the
 # sub-crates give the same API without those optional backends.
