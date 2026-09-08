@@ -34,7 +34,11 @@ fn main() {
     );
     for &c in root.children.iter().take(top) {
         let n = tree.node(c);
-        let share = if root.size == 0 { 0.0 } else { n.size as f64 * 100.0 / root.size as f64 };
+        let share = if root.size == 0 {
+            0.0
+        } else {
+            n.size as f64 * 100.0 / root.size as f64
+        };
         let suffix = match n.kind {
             Kind::Dir => "/",
             Kind::Symlink => "@",
@@ -46,7 +50,10 @@ fn main() {
             share,
             n.name,
             suffix,
-            n.error.as_ref().map(|e| format!("  [{e}]")).unwrap_or_default()
+            n.error
+                .as_ref()
+                .map(|e| format!("  [{e}]"))
+                .unwrap_or_default()
         );
     }
 }

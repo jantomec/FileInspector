@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{self, Metadata};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -6,6 +7,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::tree::{display_root, Kind, Node, ScanEvent, Tree};
+
+/// Prefix used for entries that are aliases of storage already counted at a
+/// preferable path. These are informational notes, not read failures.
+pub(crate) const DUPLICATE_PREFIX: &str = "duplicate: ";
 
 /// Start scanning `root` on a dedicated thread.
 ///
@@ -43,6 +48,9 @@ pub fn scan(root: &Path, progress: Option<&Sender<ScanEvent>>) -> io::Result<Tre
     state.emit(&root, true);
     let root_index = visit(&root, None, &mut tree, &mut state)?;
     tree.root = root_index;
+    // Deduplication can move an already-scanned subtree to a shallower alias.
+    // Recompute every aggregate once so all former ancestors lose its size.
+    tree.finalize();
     state.emit(&root, true);
 
     Ok(tree)
@@ -87,12 +95,18 @@ fn visit(
     });
 
     if is_directory {
-        visit_directory(path, index, tree, state);
+        state.dirs = state.dirs.saturating_add(1);
+        if !state.register_directory(path, index, tree, &metadata) {
+            visit_directory(path, index, tree, state);
+        }
+        state.emit(path, false);
     } else {
         let size = allocated_size(&metadata);
         tree.nodes[index].size = size;
         state.files = state.files.saturating_add(1);
-        state.bytes = state.bytes.saturating_add(size);
+        if !state.register_hard_link(path, index, tree, &metadata) {
+            state.bytes = state.bytes.saturating_add(size);
+        }
         state.emit(path, false);
     }
 
@@ -100,9 +114,6 @@ fn visit(
 }
 
 fn visit_directory(path: &Path, index: usize, tree: &mut Tree, state: &mut ScanState<'_>) {
-    state.dirs = state.dirs.saturating_add(1);
-    state.emit(path, false);
-
     let entries = match fs::read_dir(path) {
         Ok(entries) => entries,
         Err(error) => {
@@ -191,6 +202,75 @@ fn allocated_size(metadata: &Metadata) -> u64 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(unix)]
+fn file_identity(metadata: &Metadata) -> Option<(FileIdentity, u64)> {
+    use std::os::unix::fs::MetadataExt;
+
+    Some((
+        FileIdentity {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        },
+        metadata.nlink(),
+    ))
+}
+
+#[cfg(not(unix))]
+fn file_identity(_metadata: &Metadata) -> Option<(FileIdentity, u64)> {
+    None
+}
+
+/// Mark a repeated filesystem object and make the shallowest path own its
+/// size and children. Returns true when `index` is a duplicate.
+fn resolve_duplicate(
+    seen: &mut HashMap<FileIdentity, usize>,
+    identity: FileIdentity,
+    path: &Path,
+    index: usize,
+    description: &str,
+    tree: &mut Tree,
+) -> bool {
+    let Some(&previous) = seen.get(&identity) else {
+        seen.insert(identity, index);
+        return false;
+    };
+
+    let previous_path = tree.path(previous);
+    let prefer_current = path.components().count() < previous_path.components().count();
+
+    if prefer_current {
+        let size = std::mem::take(&mut tree.nodes[previous].size);
+        let children = std::mem::take(&mut tree.nodes[previous].children);
+        let error = tree.nodes[previous].error.take();
+        for child in &children {
+            tree.nodes[*child].parent = Some(index);
+        }
+        tree.nodes[index].size = size;
+        tree.nodes[index].children = children;
+        tree.nodes[index].error = error;
+        tree.nodes[previous].error = Some(format!(
+            "{DUPLICATE_PREFIX}same {description} as {}",
+            path.display()
+        ));
+        seen.insert(identity, index);
+    } else {
+        tree.nodes[index].size = 0;
+        tree.nodes[index].children.clear();
+        tree.nodes[index].error = Some(format!(
+            "{DUPLICATE_PREFIX}same {description} as {}",
+            previous_path.display()
+        ));
+    }
+
+    true
+}
+
 #[cfg(not(unix))]
 fn allocated_size(metadata: &Metadata) -> u64 {
     metadata.len()
@@ -202,6 +282,8 @@ struct ScanState<'a> {
     bytes: u64,
     progress: Option<&'a Sender<ScanEvent>>,
     last_emit: Instant,
+    directories: HashMap<FileIdentity, usize>,
+    hard_links: HashMap<FileIdentity, usize>,
 }
 
 impl<'a> ScanState<'a> {
@@ -212,7 +294,45 @@ impl<'a> ScanState<'a> {
             bytes: 0,
             progress,
             last_emit: Instant::now(),
+            directories: HashMap::new(),
+            hard_links: HashMap::new(),
         }
+    }
+
+    fn register_directory(
+        &mut self,
+        path: &Path,
+        index: usize,
+        tree: &mut Tree,
+        metadata: &Metadata,
+    ) -> bool {
+        let Some((identity, _)) = file_identity(metadata) else {
+            return false;
+        };
+        resolve_duplicate(
+            &mut self.directories,
+            identity,
+            path,
+            index,
+            "directory",
+            tree,
+        )
+    }
+
+    fn register_hard_link(
+        &mut self,
+        path: &Path,
+        index: usize,
+        tree: &mut Tree,
+        metadata: &Metadata,
+    ) -> bool {
+        let Some((identity, links)) = file_identity(metadata) else {
+            return false;
+        };
+        if links <= 1 {
+            return false;
+        }
+        resolve_duplicate(&mut self.hard_links, identity, path, index, "file", tree)
     }
 
     fn emit(&mut self, current: &Path, force: bool) {
@@ -323,6 +443,77 @@ mod tests {
         assert_eq!(symlink_nodes.len(), 1);
         assert!(symlink_nodes[0].children.is_empty());
         assert!(tree.nodes.len() < 10, "a symlink loop was followed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn counts_hard_link_storage_once() {
+        let temp = TempDir::new();
+        temp.write("original.bin", 16_000);
+        fs::hard_link(temp.0.join("original.bin"), temp.0.join("second-name.bin")).unwrap();
+        let expected = allocated_size(&fs::metadata(temp.0.join("original.bin")).unwrap());
+
+        let tree = scan(&temp.0, None).unwrap();
+        let root = tree.node(tree.root);
+        let duplicate = tree
+            .nodes
+            .iter()
+            .find(|node| {
+                node.error
+                    .as_deref()
+                    .is_some_and(|error| error.starts_with(DUPLICATE_PREFIX))
+            })
+            .expect("one hard link should be marked as a duplicate");
+
+        assert_eq!(root.size, expected);
+        assert_eq!(duplicate.size, 0);
+        assert!(duplicate.children.is_empty());
+    }
+
+    #[test]
+    fn repeated_directory_is_owned_by_the_shallowest_path() {
+        let mut tree = Tree::new("/");
+        let system = tree.add_child(0, Node::new("System", Kind::Dir, 0));
+        let volumes = tree.add_child(system, Node::new("Volumes", Kind::Dir, 0));
+        let data = tree.add_child(volumes, Node::new("Data", Kind::Dir, 0));
+        let deep_users = tree.add_child(data, Node::new("Users", Kind::Dir, 0));
+        let file = tree.add_child(deep_users, Node::new("large.bin", Kind::File, 4096));
+        tree.finalize();
+
+        let identity = FileIdentity {
+            device: 1,
+            inode: 42,
+        };
+        let mut seen = HashMap::new();
+        assert!(!resolve_duplicate(
+            &mut seen,
+            identity,
+            Path::new("/System/Volumes/Data/Users"),
+            deep_users,
+            "directory",
+            &mut tree,
+        ));
+
+        let shallow_users = tree.add_child(0, Node::new("Users", Kind::Dir, 0));
+        assert!(resolve_duplicate(
+            &mut seen,
+            identity,
+            Path::new("/Users"),
+            shallow_users,
+            "directory",
+            &mut tree,
+        ));
+        tree.finalize();
+
+        assert_eq!(tree.node(shallow_users).size, 4096);
+        assert_eq!(tree.node(shallow_users).children, [file]);
+        assert_eq!(tree.node(file).parent, Some(shallow_users));
+        assert_eq!(tree.node(deep_users).size, 0);
+        assert!(tree.node(deep_users).children.is_empty());
+        assert!(tree.node(deep_users).error.as_deref().is_some_and(|error| {
+            error == format!("{DUPLICATE_PREFIX}same directory as /Users")
+        }));
+        assert_eq!(tree.node(tree.root).size, 4096);
     }
 
     #[cfg(unix)]
