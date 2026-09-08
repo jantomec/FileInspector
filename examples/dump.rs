@@ -42,6 +42,25 @@ fn main() {
         duplicates,
         elapsed.as_secs_f64()
     );
+    // Where do read errors cluster? Most common messages, then shallowest paths.
+    let mut histogram: std::collections::HashMap<String, usize> = Default::default();
+    let mut error_ids: Vec<usize> = Vec::new();
+    for (id, n) in tree.nodes.iter().enumerate() {
+        if let Some(e) = n.read_error() {
+            let key: String = e.chars().take(70).collect();
+            *histogram.entry(key).or_default() += 1;
+            error_ids.push(id);
+        }
+    }
+    let mut histogram: Vec<_> = histogram.into_iter().collect();
+    histogram.sort_by(|a, b| b.1.cmp(&a.1));
+    for (msg, count) in histogram.iter().take(8) {
+        println!("errors {count:>8}  {msg}");
+    }
+    error_ids.sort_by_key(|&id| tree.depth(id));
+    for &id in error_ids.iter().take(12) {
+        println!("error at {}", tree.path(id).display());
+    }
     for &c in root.children.iter().take(top) {
         let n = tree.node(c);
         let share = if root.size == 0 {
