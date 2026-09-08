@@ -23,6 +23,7 @@ Unreadable folders remain visible with an error marker instead of aborting the s
 - Move with the arrow keys or `j` / `k`; Page Up, Page Down, `g`, and `G` move farther.
 - Expand or collapse a folder with Left / Right, `h` / `l`, or Space.
 - Press Enter to focus on a folder and Backspace or `u` to move back out.
+- Press `c` to collapse the expanded tree back to the current top level.
 - Press `s` to sort by size, name, or item count.
 - Mouse clicks and the scroll wheel work too.
 - Press `?` for the in-app key guide and `q`, Escape, or Ctrl-C to quit.
@@ -47,5 +48,7 @@ On macOS, inspecting protected locations may also require granting Full Disk Acc
 ## Size accounting
 
 FileInspector reports allocated disk usage (`st_blocks × 512` on Unix, with file length as a fallback). A directory's size is the sum of its readable descendants. This is why the number can differ from the logical byte length shown by some file browsers, particularly for sparse or compressed files.
+
+Hard links and macOS firmlink aliases are counted once by device and inode. The shallowest path owns the allocation; other aliases stay visible as 0 B entries with a note pointing to the counted path. This keeps a full `fi /` scan from counting the macOS Data volume twice.
 
 The scan runs on a background thread so the terminal stays responsive, and results are ordered by size descending with names breaking ties consistently.
