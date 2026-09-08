@@ -347,6 +347,29 @@ impl App {
         self.rebuild();
     }
 
+    /// Collapse every directory below the view root, keeping the selection on
+    /// the top-level ancestor of the current row.
+    pub fn collapse_all(&mut self) {
+        let view_root = self.view_root;
+        let keep = self.rows.get(self.selected).and_then(|row| {
+            let tree = self.tree()?;
+            let mut id = row.id;
+            while let Some(parent) = tree.node(id).parent {
+                if parent == view_root {
+                    break;
+                }
+                id = parent;
+            }
+            Some(id)
+        });
+        self.expanded.retain(|&id| id == view_root);
+        self.rows.clear();
+        self.rebuild();
+        if let Some(id) = keep {
+            self.selected = self.rows.iter().position(|r| r.id == id).unwrap_or(0);
+        }
+    }
+
     /// Keep the selection inside the visible window of `height` rows.
     pub fn ensure_visible(&mut self, height: usize) {
         let height = height.max(1);
@@ -390,6 +413,7 @@ impl App {
             KeyCode::Enter => self.zoom_in(),
             KeyCode::Backspace | KeyCode::Char('u') => self.zoom_out(),
             KeyCode::Char('s') => self.cycle_sort(),
+            KeyCode::Char('c') => self.collapse_all(),
             _ => {}
         }
     }
@@ -658,6 +682,18 @@ mod tests {
             app.tree().unwrap().node(app.rows[app.selected].id).name,
             "empty"
         );
+    }
+
+    #[test]
+    fn collapse_all_keeps_top_level_ancestor() {
+        let mut app = app();
+        app.expand_selected(); // a
+        app.selected = 2; // small
+        app.on_key(key(KeyCode::Char('c')));
+        assert_eq!(names(&app), ["a", "top", "b", "empty"]);
+        assert_eq!(app.selected, 0);
+        assert!(app.expanded.contains(&app.view_root));
+        assert_eq!(app.expanded.len(), 1);
     }
 
     #[test]
