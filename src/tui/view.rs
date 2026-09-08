@@ -24,6 +24,7 @@ const PARTIAL: [&str; 8] = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
 const SIZE_W: u16 = 8;
 const BAR_W: u16 = 10;
 const PCT_W: u16 = 6;
+const ITEMS_W: u16 = 10;
 const GAP: u16 = 2;
 
 /// Column x-offsets for one screen width. Narrow terminals drop the bar, then the percentage.
@@ -32,6 +33,7 @@ struct Columns {
     size_x: u16,
     bar_x: Option<u16>,
     pct_x: Option<u16>,
+    items_x: Option<u16>,
     name_x: u16,
     name_w: u16,
 }
@@ -49,10 +51,15 @@ impl Columns {
         if pct_x.is_some() {
             x += PCT_W + GAP;
         }
+        let items_x = (width >= 90).then_some(x);
+        if items_x.is_some() {
+            x += ITEMS_W + GAP;
+        }
         Columns {
             size_x,
             bar_x,
             pct_x,
+            items_x,
             name_x: x,
             name_w: width.saturating_sub(x + 1),
         }
@@ -235,6 +242,9 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
     let view_root = app.view_root;
     let root_node = tree.node(view_root);
     let path = tree.path(view_root).to_string_lossy().into_owned();
+    let selected_path = app
+        .selected_row()
+        .map(|row| tree.path(row.id).to_string_lossy().into_owned());
 
     let summary = format!(
         " {} · {} files · {} dirs ",
@@ -252,12 +262,19 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
                 .style(Style::new().bold())
                 .right_aligned(),
         );
+    let mut bottom_right_w = 0;
     if app.finished.is_some() {
-        block = block.title_bottom(
-            Line::from(format!(" scanned in {} ", format_duration(elapsed)))
-                .style(dim())
-                .right_aligned(),
-        );
+        let scanned = format!(" scanned in {} ", format_duration(elapsed));
+        bottom_right_w = scanned.width() as u16;
+        block = block.title_bottom(Line::from(scanned).style(dim()).right_aligned());
+    }
+    if let Some(selected_path) = selected_path {
+        let w = main.width.saturating_sub(bottom_right_w + 6) as usize;
+        if w >= 8 {
+            block = block.title_bottom(
+                Line::from(format!(" {} ", fit_tail(&selected_path, w))).style(dim()),
+            );
+        }
     }
     let inner = block.inner(main);
     frame.render_widget(block, main);
@@ -272,6 +289,18 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
 
     app.ensure_visible(rows_area.height as usize);
     app.rows_area = rows_area;
+    // Entry counts for the visible directories (cached in the app).
+    let visible_end = (app.offset + rows_area.height as usize).min(app.rows.len());
+    let items: Vec<Option<u64>> = (app.offset..visible_end)
+        .map(|i| {
+            let id = app.rows[i].id;
+            let is_dir = app.tree().is_some_and(|t| t.node(id).is_dir());
+            is_dir.then(|| {
+                let c = app.counts_of(id);
+                c.files + c.dirs
+            })
+        })
+        .collect();
     let tree = app.tree().expect("ready");
     let buf = frame.buffer_mut();
     if app.rows.is_empty() && rows_area.height > 0 {
@@ -286,7 +315,7 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
     {
         let line_area = Rect::new(rows_area.x, rows_area.y + i as u16, rows_area.width, 1);
         let selected = app.offset + i == app.selected;
-        draw_row(buf, line_area, cols, tree, row, selected);
+        draw_row(buf, line_area, cols, tree, row, selected, items[i]);
     }
 
     if app.rows.len() > rows_area.height as usize {
@@ -322,6 +351,14 @@ fn draw_column_header(buf: &mut Buffer, area: Rect, cols: Columns) {
             area.x + x,
             area.y,
             format!("{:>w$}", "SHARE", w = PCT_W as usize),
+            style,
+        );
+    }
+    if let Some(x) = cols.items_x {
+        buf.set_string(
+            area.x + x,
+            area.y,
+            format!("{:>w$}", "ITEMS", w = ITEMS_W as usize),
             style,
         );
     }
@@ -368,7 +405,16 @@ fn share_color(share: f64) -> Color {
     }
 }
 
-fn draw_row(buf: &mut Buffer, area: Rect, cols: Columns, tree: &Tree, row: &Row, selected: bool) {
+#[allow(clippy::too_many_arguments)]
+fn draw_row(
+    buf: &mut Buffer,
+    area: Rect,
+    cols: Columns,
+    tree: &Tree,
+    row: &Row,
+    selected: bool,
+    items: Option<u64>,
+) {
     let node = tree.node(row.id);
     if selected {
         buf.set_style(area, Style::new().bg(Color::DarkGray).fg(Color::White));
@@ -396,6 +442,18 @@ fn draw_row(buf: &mut Buffer, area: Rect, cols: Columns, tree: &Tree, row: &Row,
             Style::new().fg(share_color(row.share))
         };
         buf.set_string(area.x + x, area.y, pct, style);
+    }
+
+    // item count (directories only)
+    if let Some(x) = cols.items_x {
+        let text = items.map(group_digits).unwrap_or_default();
+        let style = if selected { base } else { dim() };
+        buf.set_string(
+            area.x + x,
+            area.y,
+            format!("{:>w$}", text, w = ITEMS_W as usize),
+            style,
+        );
     }
 
     // guides + expander + name
@@ -501,7 +559,7 @@ fn draw_footer(buf: &mut Buffer, area: Rect, app: &App) {
 }
 
 fn draw_help(frame: &mut Frame, area: Rect) {
-    let entries: [(&str, &str); 12] = [
+    let entries: [(&str, &str); 13] = [
         ("↑ ↓  j k", "move selection"),
         ("PgUp PgDn", "move by a page"),
         ("g / G", "first / last row"),
@@ -510,6 +568,7 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         ("⏎", "zoom into directory"),
         ("⌫  u", "zoom out to parent"),
         ("s", "cycle sort: size, name, items"),
+        ("c", "collapse all"),
         ("click / wheel", "select / scroll"),
         ("?", "toggle this help"),
         ("q  esc", "quit"),
@@ -579,7 +638,9 @@ mod tests {
     #[test]
     fn columns_adapt_to_width() {
         let wide = Columns::for_width(100);
-        assert!(wide.bar_x.is_some() && wide.pct_x.is_some());
+        assert!(wide.bar_x.is_some() && wide.pct_x.is_some() && wide.items_x.is_some());
+        let no_items = Columns::for_width(80);
+        assert!(no_items.bar_x.is_some() && no_items.items_x.is_none());
         let mid = Columns::for_width(50);
         assert!(mid.bar_x.is_none() && mid.pct_x.is_some());
         let narrow = Columns::for_width(30);
@@ -650,6 +711,25 @@ mod tests {
         let top = lines.iter().position(|l| l.contains(" top")).unwrap();
         let b = lines.iter().position(|l| l.contains("b/")).unwrap();
         assert!(a < top && top < b);
+    }
+
+    #[test]
+    fn items_column_and_selected_path_on_wide_terminals() {
+        let mut app = App::with_tree(PathBuf::from("/root"), sample());
+        let lines = render(&mut app, 100, 10);
+        assert!(contains(&lines, "ITEMS"), "{lines:#?}");
+        let a_row = lines.iter().find(|l| l.contains("▸ a/")).unwrap();
+        assert!(a_row.contains(" 2 "), "{a_row}");
+        let top_row = lines.iter().find(|l| l.contains("  top")).unwrap();
+        assert!(!top_row.contains(" 0 "), "{top_row}");
+        assert!(lines.last().unwrap().is_empty() || !lines.last().unwrap().contains("/root/a"));
+        assert!(contains(&lines, " /root/a "), "{lines:#?}");
+        app.move_by(1);
+        let lines = render(&mut app, 100, 10);
+        assert!(contains(&lines, " /root/top "), "{lines:#?}");
+        // Narrow terminals drop the items column but keep the rows.
+        let lines = render(&mut app, 80, 10);
+        assert!(!contains(&lines, "ITEMS"), "{lines:#?}");
     }
 
     #[test]

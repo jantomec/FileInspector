@@ -98,9 +98,15 @@ impl Tree {
     /// Recompute directory sizes bottom-up and sort every child list by
     /// size descending, then name ascending.
     pub fn finalize(&mut self) {
-        // Children always have a larger index than their parent (they are
-        // pushed after it), so a reverse pass sums sizes bottom-up.
-        for id in (0..self.nodes.len()).rev() {
+        // Pre-order from the root, then walk it backwards so every child is
+        // summed before its parent regardless of node index order.
+        let mut order = Vec::with_capacity(self.nodes.len());
+        let mut stack = vec![self.root];
+        while let Some(id) = stack.pop() {
+            order.push(id);
+            stack.extend(self.nodes[id].children.iter().copied());
+        }
+        for &id in order.iter().rev() {
             if self.nodes[id].kind == Kind::Dir {
                 let total: u64 = self.nodes[id]
                     .children
@@ -267,6 +273,21 @@ mod tests {
             .map(|&c| t.node(c).name.as_str())
             .collect();
         assert_eq!(a_names, ["big", "small"]);
+    }
+
+    #[test]
+    fn finalize_does_not_depend_on_index_order() {
+        // Wire a child whose index is lower than its parent's (as re-parenting would).
+        let mut t = Tree::new("/");
+        t.nodes.push(Node::new("file", Kind::File, 7)); // index 1
+        t.nodes.push(Node::new("dir", Kind::Dir, 0)); // index 2
+        t.nodes[1].parent = Some(2);
+        t.nodes[2].parent = Some(0);
+        t.nodes[2].children = vec![1];
+        t.nodes[0].children = vec![2];
+        t.finalize();
+        assert_eq!(t.node(2).size, 7);
+        assert_eq!(t.node(0).size, 7);
     }
 
     #[test]
