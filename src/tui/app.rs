@@ -149,7 +149,11 @@ impl App {
                 if self.finished.is_none() {
                     self.finished = Some(self.started.elapsed());
                 }
-                self.unreadable = tree.nodes.iter().filter(|n| n.error.is_some()).count() as u64;
+                self.unreadable = tree
+                    .nodes
+                    .iter()
+                    .filter(|n| n.read_error().is_some())
+                    .count() as u64;
                 self.view_root = tree.root;
                 self.expanded.clear();
                 self.expanded.insert(tree.root);
@@ -765,6 +769,10 @@ mod tests {
     fn unreadable_entries_are_counted() {
         let mut t = sample();
         t.node_mut(1).error = Some("permission denied".into());
+        t.node_mut(2).error = Some(format!(
+            "{}same file as /root/a/big",
+            crate::tree::DUPLICATE_PREFIX
+        ));
         let app = App::with_tree(PathBuf::from("/root"), t);
         assert_eq!(app.unreadable, 1);
     }

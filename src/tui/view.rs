@@ -474,6 +474,8 @@ fn draw_row(
     };
     let name_style = if selected {
         base
+    } else if node.duplicate_note().is_some() {
+        dim()
     } else {
         match node.kind {
             Kind::Dir => Style::new().fg(Color::Blue).add_modifier(Modifier::BOLD),
@@ -488,7 +490,9 @@ fn draw_row(
         Span::styled(expander, name_style),
         Span::styled(name, name_style),
     ];
-    if let Some(err) = &node.error {
+    if let Some(note) = node.duplicate_note() {
+        spans.push(Span::styled(format!("  ≡ {note}"), dim()));
+    } else if let Some(err) = node.read_error() {
         spans.push(Span::styled(
             format!("  ⚠ {err}"),
             Style::new().fg(Color::Yellow),
@@ -787,6 +791,19 @@ mod tests {
         app.expand_selected();
         let lines = render(&mut app, 100, 12);
         assert!(contains(&lines, "⚠ permission denied"), "{lines:#?}");
+        // Duplicate aliases are annotated but not counted as unreadable.
+        let mut t = sample();
+        t.node_mut(4).error = Some(format!(
+            "{}same directory as /root/a",
+            crate::tree::DUPLICATE_PREFIX
+        ));
+        let mut app = App::with_tree(PathBuf::from("/root"), t);
+        let lines = render(&mut app, 100, 12);
+        assert!(
+            contains(&lines, "≡ same directory as /root/a"),
+            "{lines:#?}"
+        );
+        assert!(!contains(&lines, "unreadable"), "{lines:#?}");
         app.show_help = true;
         let lines = render(&mut app, 100, 20);
         assert!(contains(&lines, "Keys"), "{lines:#?}");

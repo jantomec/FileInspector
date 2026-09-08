@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 /// Index of a node inside [`Tree::nodes`].
 pub type NodeId = usize;
 
+/// Prefix of [`Node::error`] for entries that alias something already counted
+/// elsewhere (hard links, macOS firmlinks). Such nodes carry no size.
+pub const DUPLICATE_PREFIX: &str = "duplicate: ";
+
 /// What kind of filesystem entry a node describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -50,6 +54,19 @@ impl Node {
 
     pub fn is_dir(&self) -> bool {
         self.kind == Kind::Dir
+    }
+
+    /// Note explaining that this entry duplicates one counted elsewhere.
+    pub fn duplicate_note(&self) -> Option<&str> {
+        self.error.as_deref()?.strip_prefix(DUPLICATE_PREFIX)
+    }
+
+    /// A genuine read failure (permission denied, vanished entry, ...).
+    pub fn read_error(&self) -> Option<&str> {
+        match self.error.as_deref() {
+            Some(e) if !e.starts_with(DUPLICATE_PREFIX) => Some(e),
+            _ => None,
+        }
     }
 }
 
@@ -288,6 +305,18 @@ mod tests {
         t.finalize();
         assert_eq!(t.node(2).size, 7);
         assert_eq!(t.node(0).size, 7);
+    }
+
+    #[test]
+    fn duplicate_notes_are_not_read_errors() {
+        let mut n = Node::new("x", Kind::Dir, 0);
+        assert!(n.duplicate_note().is_none() && n.read_error().is_none());
+        n.error = Some("permission denied".into());
+        assert_eq!(n.read_error(), Some("permission denied"));
+        assert!(n.duplicate_note().is_none());
+        n.error = Some(format!("{DUPLICATE_PREFIX}same directory as /Users"));
+        assert_eq!(n.duplicate_note(), Some("same directory as /Users"));
+        assert!(n.read_error().is_none());
     }
 
     #[test]

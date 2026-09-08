@@ -21,15 +21,25 @@ fn main() {
     let elapsed = started.elapsed();
     let root = tree.node(tree.root);
     let counts = tree.counts(tree.root);
-    let errors = tree.nodes.iter().filter(|n| n.error.is_some()).count();
+    let errors = tree
+        .nodes
+        .iter()
+        .filter(|n| n.read_error().is_some())
+        .count();
+    let duplicates = tree
+        .nodes
+        .iter()
+        .filter(|n| n.duplicate_note().is_some())
+        .count();
     println!(
-        "{}\t{} bytes\t{}\t{} files\t{} dirs\t{} unreadable\t{:.2}s",
+        "{}\t{} bytes\t{}\t{} files\t{} dirs\t{} unreadable\t{} duplicates\t{:.2}s",
         tree.path(tree.root).display(),
         root.size,
         human_size(root.size),
         counts.files,
         counts.dirs,
         errors,
+        duplicates,
         elapsed.as_secs_f64()
     );
     for &c in root.children.iter().take(top) {

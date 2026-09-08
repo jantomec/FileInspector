@@ -10,7 +10,7 @@ use crate::tree::{display_root, Kind, Node, ScanEvent, Tree};
 
 /// Prefix used for entries that are aliases of storage already counted at a
 /// preferable path. These are informational notes, not read failures.
-pub(crate) const DUPLICATE_PREFIX: &str = "duplicate: ";
+pub(crate) use crate::tree::DUPLICATE_PREFIX;
 
 /// Start scanning `root` on a dedicated thread.
 ///
