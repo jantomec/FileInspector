@@ -14,7 +14,9 @@ use std::time::Duration;
 
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind};
 use crossterm::execute;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use ratatui_core::terminal::Terminal;
 use ratatui_crossterm::CrosstermBackend;
 
@@ -39,7 +41,7 @@ fn init_terminal() -> io::Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     if let Err(e) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
-        let _ = disable_raw_mode();
+        restore_terminal();
         return Err(e);
     }
     let hook = std::panic::take_hook();
@@ -47,7 +49,13 @@ fn init_terminal() -> io::Result<Term> {
         restore_terminal();
         hook(info);
     }));
-    Terminal::new(CrosstermBackend::new(stdout))
+    match Terminal::new(CrosstermBackend::new(stdout)) {
+        Ok(terminal) => Ok(terminal),
+        Err(error) => {
+            restore_terminal();
+            Err(error)
+        }
+    }
 }
 
 fn restore_terminal() {
@@ -86,7 +94,9 @@ fn event_loop(terminal: &mut Term, app: &mut App, rx: Receiver<ScanEvent>) -> io
         };
         if event::poll(timeout)? {
             match event::read()? {
-                Event::Key(key) if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) => {
+                Event::Key(key)
+                    if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                {
                     app.on_key(key);
                 }
                 Event::Mouse(mouse) => app.on_mouse(mouse),

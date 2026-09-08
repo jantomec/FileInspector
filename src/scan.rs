@@ -374,7 +374,7 @@ mod tests {
     fn missing_root_is_an_error() {
         let temp = TempDir::new();
         let missing = temp.0.join("not-here");
-        let error = scan(&missing, None).err().expect("missing root must fail");
+        let error = scan(&missing, None).expect_err("missing root must fail");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 }

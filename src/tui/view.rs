@@ -169,7 +169,10 @@ fn draw_scanning(frame: &mut Frame, app: &mut App, area: Rect) {
     let lines = vec![
         Line::from(vec![
             Span::styled(format!(" {spinner} "), accent()),
-            Span::styled(fit_tail(&app.root.to_string_lossy(), width.saturating_sub(3)), Style::new().bold()),
+            Span::styled(
+                fit_tail(&app.root.to_string_lossy(), width.saturating_sub(3)),
+                Style::new().bold(),
+            ),
         ]),
         Line::default(),
         Line::from(format!(
@@ -180,11 +183,17 @@ fn draw_scanning(frame: &mut Frame, app: &mut App, area: Rect) {
         )),
         Line::from(format!(" elapsed {}", format_duration(app.elapsed()))),
         Line::from(Span::styled(
-            format!(" {}", fit_tail(&progress.current.to_string_lossy(), width.saturating_sub(1))),
+            format!(
+                " {}",
+                fit_tail(&progress.current.to_string_lossy(), width.saturating_sub(1))
+            ),
             dim(),
         )),
         Line::default(),
-        Line::from(vec![Span::styled(" q", accent()), Span::styled(" quit", dim())]),
+        Line::from(vec![
+            Span::styled(" q", accent()),
+            Span::styled(" quit", dim()),
+        ]),
     ];
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
@@ -203,9 +212,15 @@ fn draw_failed(frame: &mut Frame, app: &mut App, area: Rect) {
     let lines = vec![
         Line::from(format!(" {message}")),
         Line::default(),
-        Line::from(vec![Span::styled(" q", accent()), Span::styled(" quit", dim())]),
+        Line::from(vec![
+            Span::styled(" q", accent()),
+            Span::styled(" quit", dim()),
+        ]),
     ];
-    frame.render_widget(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: false }), inner);
+    frame.render_widget(
+        Paragraph::new(Text::from(lines)).wrap(Wrap { trim: false }),
+        inner,
+    );
 }
 
 // ----- main view -------------------------------------------------------------
@@ -232,7 +247,11 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(dim())
         .title(Line::from(format!(" {} ", fit_tail(&path, title_w))).style(accent()))
-        .title_top(Line::from(summary).style(Style::new().bold()).right_aligned());
+        .title_top(
+            Line::from(summary)
+                .style(Style::new().bold())
+                .right_aligned(),
+        );
     if app.finished.is_some() {
         block = block.title_bottom(
             Line::from(format!(" scanned in {} ", format_duration(elapsed)))
@@ -246,7 +265,8 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
 
-    let [header, rows_area] = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(inner);
+    let [header, rows_area] =
+        Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).areas(inner);
     let cols = Columns::for_width(inner.width);
     draw_column_header(frame.buffer_mut(), header, cols);
 
@@ -257,15 +277,22 @@ fn draw_ready(frame: &mut Frame, app: &mut App, area: Rect) {
     if app.rows.is_empty() && rows_area.height > 0 {
         buf.set_string(rows_area.x + 1, rows_area.y, "(empty directory)", dim());
     }
-    for (i, row) in app.rows.iter().skip(app.offset).take(rows_area.height as usize).enumerate() {
+    for (i, row) in app
+        .rows
+        .iter()
+        .skip(app.offset)
+        .take(rows_area.height as usize)
+        .enumerate()
+    {
         let line_area = Rect::new(rows_area.x, rows_area.y + i as u16, rows_area.width, 1);
         let selected = app.offset + i == app.selected;
         draw_row(buf, line_area, cols, tree, row, selected);
     }
 
     if app.rows.len() > rows_area.height as usize {
-        let mut state = ScrollbarState::new(app.rows.len().saturating_sub(rows_area.height as usize))
-            .position(app.offset);
+        let mut state =
+            ScrollbarState::new(app.rows.len().saturating_sub(rows_area.height as usize))
+                .position(app.offset);
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
@@ -282,11 +309,21 @@ fn draw_column_header(buf: &mut Buffer, area: Rect, cols: Columns) {
         return;
     }
     let style = dim().add_modifier(Modifier::BOLD);
-    buf.set_string(area.x + cols.size_x, area.y, format!("{:>w$}", "SIZE", w = SIZE_W as usize), style);
+    buf.set_string(
+        area.x + cols.size_x,
+        area.y,
+        format!("{:>w$}", "SIZE", w = SIZE_W as usize),
+        style,
+    );
     if let Some(x) = cols.bar_x {
         buf.set_string(area.x + x, area.y, "SHARE", style);
     } else if let Some(x) = cols.pct_x {
-        buf.set_string(area.x + x, area.y, format!("{:>w$}", "SHARE", w = PCT_W as usize), style);
+        buf.set_string(
+            area.x + x,
+            area.y,
+            format!("{:>w$}", "SHARE", w = PCT_W as usize),
+            style,
+        );
     }
     if cols.name_w > 0 {
         buf.set_string(area.x + cols.name_x, area.y, "NAME", style);
@@ -302,13 +339,20 @@ fn bar_spans(share: f64) -> Vec<Span<'static>> {
     } else {
         0
     };
-    let (eighths, full) = if eighths == 8 { (0, full + 1) } else { (eighths, full) };
+    let (eighths, full) = if eighths == 8 {
+        (0, full + 1)
+    } else {
+        (eighths, full)
+    };
     let filled = format!("{}{}", "█".repeat(full), PARTIAL[eighths]);
     let used = full + usize::from(eighths > 0);
     let track = "░".repeat((BAR_W as usize).saturating_sub(used));
     vec![
         Span::styled(filled, Style::new().fg(share_color(share))),
-        Span::styled(track, Style::new().fg(Color::DarkGray).add_modifier(Modifier::DIM)),
+        Span::styled(
+            track,
+            Style::new().fg(Color::DarkGray).add_modifier(Modifier::DIM),
+        ),
     ]
 }
 
@@ -346,7 +390,11 @@ fn draw_row(buf: &mut Buffer, area: Rect, cols: Columns, tree: &Tree, row: &Row,
     }
     if let Some(x) = cols.pct_x {
         let pct = format!("{:>5.1}%", row.share * 100.0);
-        let style = if selected { base } else { Style::new().fg(share_color(row.share)) };
+        let style = if selected {
+            base
+        } else {
+            Style::new().fg(share_color(row.share))
+        };
         buf.set_string(area.x + x, area.y, pct, style);
     }
 
@@ -383,7 +431,10 @@ fn draw_row(buf: &mut Buffer, area: Rect, cols: Columns, tree: &Tree, row: &Row,
         Span::styled(name, name_style),
     ];
     if let Some(err) = &node.error {
-        spans.push(Span::styled(format!("  ⚠ {err}"), Style::new().fg(Color::Yellow)));
+        spans.push(Span::styled(
+            format!("  ⚠ {err}"),
+            Style::new().fg(Color::Yellow),
+        ));
     }
     let line = Line::from(spans);
     let width = cols.name_w as usize;
@@ -554,13 +605,25 @@ mod tests {
 
     #[test]
     fn bar_fills_proportionally() {
-        let full: String = bar_spans(1.0).iter().map(|s| s.content.to_string()).collect();
+        let full: String = bar_spans(1.0)
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert_eq!(full, "█".repeat(10));
-        let half: String = bar_spans(0.5).iter().map(|s| s.content.to_string()).collect();
+        let half: String = bar_spans(0.5)
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert_eq!(half, format!("{}{}", "█".repeat(5), "░".repeat(5)));
-        let bit: String = bar_spans(0.05).iter().map(|s| s.content.to_string()).collect();
+        let bit: String = bar_spans(0.05)
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert_eq!(bit, format!("▌{}", "░".repeat(9)));
-        let none: String = bar_spans(0.0).iter().map(|s| s.content.to_string()).collect();
+        let none: String = bar_spans(0.0)
+            .iter()
+            .map(|s| s.content.to_string())
+            .collect();
         assert_eq!(none, "░".repeat(10));
         for share in [0.0, 0.01, 0.33, 0.5, 0.99, 1.0] {
             let w: usize = bar_spans(share).iter().map(|s| s.content.width()).sum();
@@ -577,7 +640,10 @@ mod tests {
         assert!(contains(&lines, "SIZE"), "{lines:#?}");
         assert!(contains(&lines, "▸ a/"), "{lines:#?}");
         assert!(contains(&lines, "66.7%"), "{lines:#?}");
-        assert!(contains(&lines, "└─   b/") || contains(&lines, "└─ ▸ b/"), "{lines:#?}");
+        assert!(
+            contains(&lines, "└─   b/") || contains(&lines, "└─ ▸ b/"),
+            "{lines:#?}"
+        );
         assert!(contains(&lines, "sort: size"), "{lines:#?}");
         // rows drawn in order a, top, b
         let a = lines.iter().position(|l| l.contains("a/")).unwrap();
@@ -619,7 +685,10 @@ mod tests {
         });
         let lines = render(&mut app, 80, 12);
         assert!(contains(&lines, "Scanning"), "{lines:#?}");
-        assert!(contains(&lines, "12 dirs · 3,456 files · 7.0 MiB"), "{lines:#?}");
+        assert!(
+            contains(&lines, "12 dirs · 3,456 files · 7.0 MiB"),
+            "{lines:#?}"
+        );
         assert!(contains(&lines, "/scan/me/deep"), "{lines:#?}");
 
         app.apply(ScanEvent::Error("no such directory".into()));

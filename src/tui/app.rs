@@ -189,10 +189,7 @@ impl App {
         let Phase::Ready(tree) = &self.phase else {
             return Counts::default();
         };
-        *self
-            .counts
-            .entry(id)
-            .or_insert_with(|| tree.counts(id))
+        *self.counts.entry(id).or_insert_with(|| tree.counts(id))
     }
 
     pub fn selected_row(&self) -> Option<&Row> {
@@ -476,7 +473,14 @@ fn build_rows(
     let mut rows = Vec::new();
     let mut guides = Vec::new();
     push_children(
-        tree, view_root, 0, expanded, sort, counts, &mut guides, &mut rows,
+        tree,
+        view_root,
+        0,
+        expanded,
+        sort,
+        counts,
+        &mut guides,
+        &mut rows,
     );
     rows
 }
@@ -607,7 +611,10 @@ mod tests {
         app.selected = 4; // "b"
         app.cycle_sort(); // Name: a, b, empty, top (a expanded: big, small)
         assert_eq!(names(&app), ["a", "  big", "  small", "b", "empty", "top"]);
-        assert_eq!(app.tree().unwrap().node(app.rows[app.selected].id).name, "b");
+        assert_eq!(
+            app.tree().unwrap().node(app.rows[app.selected].id).name,
+            "b"
+        );
     }
 
     #[test]
@@ -619,7 +626,10 @@ mod tests {
         assert_eq!(app.selected, 0);
         app.on_key(key(KeyCode::Backspace));
         assert_eq!(app.view_root, 0);
-        assert_eq!(app.tree().unwrap().node(app.rows[app.selected].id).name, "a");
+        assert_eq!(
+            app.tree().unwrap().node(app.rows[app.selected].id).name,
+            "a"
+        );
         // Left at top level zooms out; at the root it is a no-op.
         app.on_key(key(KeyCode::Left));
         assert_eq!(app.view_root, 0);
@@ -644,7 +654,10 @@ mod tests {
         assert_eq!(app.selected, 0);
         app.on_key(key(KeyCode::Left)); // zoom back out
         assert_eq!(app.view_root, 0);
-        assert_eq!(app.tree().unwrap().node(app.rows[app.selected].id).name, "empty");
+        assert_eq!(
+            app.tree().unwrap().node(app.rows[app.selected].id).name,
+            "empty"
+        );
     }
 
     #[test]
