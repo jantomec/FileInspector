@@ -53,7 +53,7 @@ fn main() {
         }
     }
     let mut histogram: Vec<_> = histogram.into_iter().collect();
-    histogram.sort_by(|a, b| b.1.cmp(&a.1));
+    histogram.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     for (msg, count) in histogram.iter().take(8) {
         println!("errors {count:>8}  {msg}");
     }

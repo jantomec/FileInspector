@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "Interactive disk-usage explorer for the terminal"
 license = "MIT"
+repository = "https://github.com/jantomec/FileInspector"
+readme = "README.md"
 
 [lib]
 name = "fileinspector"
@@ -26,3 +28,4 @@ unicode-width = "0.2"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+strip = true

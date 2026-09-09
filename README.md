@@ -28,9 +28,25 @@ Unreadable folders remain visible with an error marker instead of aborting the s
 - Mouse clicks and the scroll wheel work too.
 - Press `?` for the in-app key guide and `q`, Escape, or Ctrl-C to quit.
 
-## Install it
+## Install a prebuilt binary
 
-Install for your user with Cargo:
+No Rust toolchain needed. On macOS (Apple Silicon or Intel) and Linux (x86_64 or arm64):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jantomec/FileInspector/main/install.sh | sh
+```
+
+The script downloads the matching archive from the [latest release](https://github.com/jantomec/FileInspector/releases/latest), verifies its SHA-256 checksum, and installs `fi` into `/usr/local/bin` (or `~/.local/bin` if that is not writable). Set `FI_INSTALL_DIR` to choose another directory, or `FI_VERSION=v0.1.0` to pin a version.
+
+To install by hand, download `fi-<version>-<target>.tar.gz` from the releases page, extract it, and copy `fi` somewhere on your `PATH`. If you download with a browser on macOS, clear the quarantine flag first:
+
+```sh
+xattr -d com.apple.quarantine ./fi
+```
+
+## Install it from source
+
+Install for your user with Cargo (from a clone, or straight from GitHub with `cargo install --git https://github.com/jantomec/FileInspector`):
 
 ```sh
 cargo install --path .
