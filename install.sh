@@ -1,11 +1,11 @@
 #!/bin/sh
-# Install a prebuilt fi binary from GitHub releases.
+# Install a prebuilt fileinspector binary from GitHub releases.
 #   curl -fsSL https://raw.githubusercontent.com/jantomec/FileInspector/main/install.sh | sh
-# Environment: FI_REPO (owner/name), FI_VERSION (tag, default latest),
-#              FI_INSTALL_DIR (default /usr/local/bin if writable, else ~/.local/bin)
+# Environment: FILEINSPECTOR_REPO (owner/name), FILEINSPECTOR_VERSION (tag, default latest),
+#              FILEINSPECTOR_INSTALL_DIR (default /usr/local/bin if writable, else ~/.local/bin)
 set -eu
-REPO="${FI_REPO:-jantomec/FileInspector}"
-VERSION="${FI_VERSION:-latest}"
+REPO="${FILEINSPECTOR_REPO:-jantomec/FileInspector}"
+VERSION="${FILEINSPECTOR_VERSION:-latest}"
 
 case "$(uname -s)" in
   Darwin) os=apple-darwin ;;
@@ -25,7 +25,7 @@ if [ "$VERSION" = latest ]; then
   [ -n "$VERSION" ] || { echo "install.sh: could not determine the latest release" >&2; exit 1; }
 fi
 
-name="fi-$VERSION-$target"
+name="fileinspector-$VERSION-$target"
 base="https://github.com/$REPO/releases/download/$VERSION"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -40,14 +40,14 @@ else
 fi
 tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
 
-dest="${FI_INSTALL_DIR:-}"
+dest="${FILEINSPECTOR_INSTALL_DIR:-}"
 if [ -z "$dest" ]; then
   if [ -w /usr/local/bin ]; then dest=/usr/local/bin; else dest="$HOME/.local/bin"; fi
 fi
 mkdir -p "$dest"
-install -m 0755 "$tmp/$name/fi" "$dest/fi"
-echo "Installed fi $VERSION to $dest/fi"
+install -m 0755 "$tmp/$name/fileinspector" "$dest/fileinspector"
+echo "Installed fileinspector $VERSION to $dest/fileinspector"
 case ":$PATH:" in
   *":$dest:"*) ;;
-  *) echo "Note: $dest is not on your PATH; add it or run $dest/fi directly." ;;
+  *) echo "Note: $dest is not on your PATH; add it or run $dest/fileinspector directly." ;;
 esac

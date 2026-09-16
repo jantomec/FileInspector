@@ -12,7 +12,7 @@ name = "fileinspector"
 path = "src/lib.rs"
 
 [[bin]]
-name = "fi"
+name = "fileinspector"
 path = "src/main.rs"
 
 [dependencies]

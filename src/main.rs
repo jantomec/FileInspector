@@ -6,7 +6,7 @@ use fileinspector::{scan, tui};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "fi",
+    name = "fileinspector",
     version,
     about = "Explore what is using your disk space",
     long_about = "Scan a directory, then explore its files and nested folders in an interactive terminal tree."
@@ -24,13 +24,13 @@ fn main() -> ExitCode {
     let root = match cli.path.canonicalize() {
         Ok(root) => root,
         Err(error) => {
-            eprintln!("fi: cannot inspect {display_path}: {error}");
+            eprintln!("fileinspector: cannot inspect {display_path}: {error}");
             return ExitCode::from(2);
         }
     };
 
     if !root.is_dir() {
-        eprintln!("fi: {} is not a directory", root.display());
+        eprintln!("fileinspector: {} is not a directory", root.display());
         return ExitCode::from(2);
     }
 
@@ -38,7 +38,7 @@ fn main() -> ExitCode {
     match tui::run(events, root) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("fi: terminal error: {error}");
+            eprintln!("fileinspector: terminal error: {error}");
             ExitCode::FAILURE
         }
     }
@@ -50,18 +50,18 @@ mod tests {
 
     #[test]
     fn defaults_to_the_current_directory() {
-        let cli = Cli::try_parse_from(["fi"]).unwrap();
+        let cli = Cli::try_parse_from(["fileinspector"]).unwrap();
         assert_eq!(cli.path, PathBuf::from("."));
     }
 
     #[test]
     fn accepts_a_root_path() {
-        let cli = Cli::try_parse_from(["fi", "/tmp"]).unwrap();
+        let cli = Cli::try_parse_from(["fileinspector", "/tmp"]).unwrap();
         assert_eq!(cli.path, PathBuf::from("/tmp"));
     }
 
     #[test]
     fn rejects_more_than_one_root() {
-        assert!(Cli::try_parse_from(["fi", "/tmp", "/var"]).is_err());
+        assert!(Cli::try_parse_from(["fileinspector", "/tmp", "/var"]).is_err());
     }
 }
